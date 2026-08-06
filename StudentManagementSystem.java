@@ -1,13 +1,17 @@
-import javax.swing.*;
-import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
+import javax.swing.*;
+import javax.swing.table.AbstractTableModel;
+import javax.swing.table.TableRowSorter;
+
 
 /**
  * StudentManagementSystem
@@ -574,4 +578,191 @@ public class StudentManagementSystem extends JFrame {
         }
         System.exit(0);
     }
+}
+
+
+/**
+ * Represents a single student record managed by the system.
+ * Each student keeps track of the courses they are enrolled in
+ * and the grade earned in each course (or "N/A" if not yet graded).
+ */
+class Student {
+    private final int id;
+    private String name;
+    private String email;
+    private String major;
+
+    // Key = course code (e.g. "CS101"), Value = grade (e.g. "A", "N/A")
+    private final Map<String, String> enrolledCourses = new LinkedHashMap<>();
+
+    public Student(int id, String name, String email, String major) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.major = major;
+    }
+
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public String getMajor() { return major; }
+
+    public void setName(String name) { this.name = name; }
+    public void setEmail(String email) { this.email = email; }
+    public void setMajor(String major) { this.major = major; }
+
+    public Map<String, String> getEnrolledCourses() { return enrolledCourses; }
+
+    public boolean isEnrolledIn(String courseCode) {
+        return enrolledCourses.containsKey(courseCode);
+    }
+
+    public void enroll(String courseCode) {
+        enrolledCourses.put(courseCode, "N/A");
+    }
+
+    public void assignGrade(String courseCode, String grade) {
+        enrolledCourses.put(courseCode, grade);
+    }
+
+    @Override
+    public String toString() {
+        // Used by JComboBox / JList rendering
+        return id + " - " + name;
+    }
+}
+
+/**
+ * Represents a course that students can be enrolled in.
+ */
+class Course {
+    private final String code;
+    private final String title;
+
+    public Course(String code, String title) {
+        this.code = code;
+        this.title = title;
+    }
+
+    public String getCode() { return code; }
+    public String getTitle() { return title; }
+
+    @Override
+    public String toString() {
+        // Used by JComboBox rendering
+        return code + " - " + title;
+    }
+}
+
+/**
+ * This file groups the custom exception types used throughout the
+ * Student Management System GUI to represent specific error conditions.
+ * Keeping them as distinct types (rather than one generic Exception)
+ * lets each event handler give the administrator a precise, helpful
+ * error message instead of a generic failure notice.
+ */
+
+/** Thrown when a required field is missing or fails validation (e.g. malformed email). */
+class InvalidInputException extends Exception {
+    public InvalidInputException(String message) {
+        super(message);
+    }
+}
+
+/** Thrown when the administrator triggers an action without selecting a required item first. */
+class NoSelectionException extends Exception {
+    public NoSelectionException(String message) {
+        super(message);
+    }
+}
+
+/** Thrown when a grade value entered by the administrator does not match an accepted format. */
+class InvalidGradeException extends Exception {
+    public InvalidGradeException(String message) {
+        super(message);
+    }
+}
+
+
+/**
+ * Backs the JTable on the "Students" tab. Because it extends
+ * AbstractTableModel and we call fireTableDataChanged()/fireTableRowsUpdated()
+ * whenever the underlying list changes, the table (and any other view built
+ * on this model) updates dynamically without needing a manual refresh.
+ */
+class StudentTableModel extends AbstractTableModel {
+    private final String[] columns = {"ID", "Name", "Email", "Major", "Courses Enrolled"};
+    private final List<Student> students;
+
+    public StudentTableModel(List<Student> students) {
+        this.students = students;
+    }
+
+    @Override
+    public int getRowCount() { return students.size(); }
+
+    @Override
+    public int getColumnCount() { return columns.length; }
+
+    @Override
+    public String getColumnName(int col) { return columns[col]; }
+
+    @Override
+    public Object getValueAt(int row, int col) {
+        Student s = students.get(row);
+        switch (col) {
+            case 0: return s.getId();
+            case 1: return s.getName();
+            case 2: return s.getEmail();
+            case 3: return s.getMajor();
+            case 4: return s.getEnrolledCourses().size();
+            default: return "";
+        }
+    }
+
+    public Student getStudentAt(int row) { return students.get(row); }
+
+    public void refresh() { fireTableDataChanged(); }
+}
+
+
+/**
+ * Backs the JTable on the "Grades" tab that shows the courses a selected
+ * student is enrolled in, along with their current grade in each.
+ */
+class CourseGradeTableModel extends AbstractTableModel {
+    private final String[] columns = {"Course Code", "Grade"};
+    private List<String> courseCodes = new ArrayList<>();
+    private Student currentStudent;
+
+    public void setStudent(Student student) {
+        this.currentStudent = student;
+        courseCodes = new ArrayList<>();
+        if (student != null) {
+            for (Map.Entry<String, String> e : student.getEnrolledCourses().entrySet()) {
+                courseCodes.add(e.getKey());
+            }
+        }
+        fireTableDataChanged();
+    }
+
+    @Override
+    public int getRowCount() { return courseCodes.size(); }
+
+    @Override
+    public int getColumnCount() { return columns.length; }
+
+    @Override
+    public String getColumnName(int col) { return columns[col]; }
+
+    @Override
+    public Object getValueAt(int row, int col) {
+        String code = courseCodes.get(row);
+        if (col == 0) return code;
+        return currentStudent.getEnrolledCourses().get(code);
+    }
+
+    public String getCourseCodeAt(int row) { return courseCodes.get(row); }
+
+    public void refresh() { fireTableDataChanged(); }
 }
